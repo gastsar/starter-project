@@ -1,0 +1,140 @@
+---
+import { sanityClient } from "sanity:client";
+
+const query = `*[_type == "post"] | order(publishedAt desc) {
+  title,
+  slug,
+  mainImage,
+  publishedAt,
+  excerpt,
+  body,
+  "categories": categories[]->title
+}`;
+
+const posts = await sanityClient.fetch(query);
+
+function extractTextFromPortableText(portableText: any[]): string {
+  if (!portableText || !Array.isArray(portableText)) return '';
+  
+  return portableText
+    .map(block => {
+      if (block._type !== 'block' || !block.children) return '';
+      
+      return block.children
+        .map((child: any) => child.text || '')
+        .join(' ');
+    })
+    .filter(text => text.length > 0)
+    .join('\n\n');
+}
+
+function getOptimizedImageUrl(image: any) {
+  if (!image || !image.asset?.url) {
+    return '/default-og.webp'; // Assure-toi que ce fichier existe dans le répertoire public
+  }
+  return `${image.asset.url}?w=800&h=600&fit=crop&auto=format`;
+}
+
+---
+
+<section class="articles">
+  <div class="articles-grid">
+    {posts.map((post: any) => (
+      <article class="article-card" itemscope itemtype="https://schema.org/Article">
+        {post.mainImage && (
+          <img 
+            src={getOptimizedImageUrl(post.mainImage)}
+            alt={post.title || 'Article sans titre'}
+            class="article-image"
+            loading="lazy"
+            itemprop="image"
+          />
+        )}
+        <div class="article-content">
+          <header>
+            <h2 itemprop="headline">{post.title || 'Titre manquant'}</h2>
+          </header>
+          {post.body && (
+            <div class="article-body" itemprop="articleBody">
+              <p>{extractTextFromPortableText(post.body)}</p>
+            </div>
+          )}
+          <div class="article-meta">
+            <time datetime={post.publishedAt} itemprop="datePublished">
+              {new Date(post.publishedAt).toLocaleDateString('fr-FR')}
+            </time>
+            {post.categories && (
+              <div class="categories">
+                {post.categories.map((category: string) => (
+                  <span class="category" itemprop="about">{category}</span>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* Extrait de l'article pour la meta description */}
+          <meta name="description" content={post.excerpt || extractTextFromPortableText(post.body).slice(0, 150)} />
+        </div>
+      </article>
+    ))}
+  </div>
+</section>
+
+
+<style>
+  .articles {
+    padding: 2rem;
+  }
+
+  .articles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+  }
+
+  .article-card {
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transition: transform 0.2s;
+  }
+
+  .article-card:hover {
+    transform: translateY(-4px);
+  }
+
+  .article-image {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+  }
+
+  .article-content {
+    padding: 1.5rem;
+  }
+
+  .article-content h2 {
+    margin: 0 0 1rem;
+    font-size: 1.5rem;
+  }
+
+  .article-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 1rem;
+    font-size: 0.9rem;
+    color: #666;
+  }
+
+  .categories {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .category {
+    background: #f0f0f0;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+  }
+</style>
